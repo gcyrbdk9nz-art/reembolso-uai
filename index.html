@@ -148,7 +148,7 @@ details ul{padding-left:1.1rem;margin:.5rem 0}
     <ul class="ledger" id="ledger"></ul>
     <div class="empty-state" id="empty">Nenhuma despesa salva ainda. Tire a foto de uma nota ou use a nota fictícia para testar.</div>
     <div class="total" id="totalRow" hidden><span>Total</span><b id="total">R$ 0,00</b></div>
-    <p class="note">A planilha sai no formato da tabela <b>NotasViagem</b>: Estabelecimento, Data, Montante, Moeda, Categoria, Status e FOTOS_PREST_CONTAS, mais CNPJ, pagamento, observação e chave da NFC-e no fim.</p>
+    <p class="note">A planilha sai no formato da tabela <b>NotasViagem</b>: os campos da tela de recibos do TRIP vêm primeiro (TDesp, Montante, Taxa câmbio, Data, Info.brv), depois Moeda, Status, FOTOS_PREST_CONTAS, CNPJ, pagamento, observação e chave da NFC-e.</p>
     <div class="row">
       <button class="primary" type="button" id="xlsx" disabled>Baixar planilha (.xlsx)</button>
       <button type="button" id="zip" disabled>Planilha + fotos (.zip)</button>
@@ -525,7 +525,7 @@ function render(){
 }
 
 /* ---------- Excel (real .xlsx with table "NotasViagem", written by hand: no library) ---------- */
-const COLS=[["Estabelecimento",34],["Data",12],["Montante",13],["Moeda",8],["Categoria",20],["Status",11],["FOTOS_PREST_CONTAS",48],["CNPJ",20],["Forma de pagamento",19],["Observação",30],["Chave de acesso NFC-e",48]];
+const COLS=[["TDesp",20],["Montante",13],["Taxa câmbio",13],["Data",12],["Info.brv",34],["Moeda",8],["Status",11],["FOTOS_PREST_CONTAS",48],["CNPJ",20],["Forma de pagamento",19],["Observação",30],["Chave de acesso NFC-e",48]];
 const enc=new TextEncoder();
 const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
 function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
@@ -562,11 +562,11 @@ function buildXlsx(items){
   const num=(r,c,v,s)=>`<c r="${colL(c)}${r}" s="${s}"><v>${v}</v></c>`;
   let rows=`<row r="1">${COLS.map((c,i)=>str(1,i,c[0],3)).join("")}</row>`;
   items.forEach((it,k)=>{const r=k+2;const d=serial(it.data);
-    const vals=[it.estabelecimento,null,null,it.moeda||"BRL",it.categoria,it.status||"Pendente",fotoPath(it),it.cnpj,it.pagamento,it.obs,it.chave];
+    const vals=[it.categoria,null,null,null,it.estabelecimento,it.moeda||"BRL",it.status||"Pendente",fotoPath(it),it.cnpj,it.pagamento,it.obs,it.chave];
     let cells="";
     vals.forEach((v,i)=>{
-      if(i===1) cells+=d!=null?num(r,1,d,1):str(r,1,it.data||"");
-      else if(i===2) cells+=num(r,2,(+it.valor||0).toFixed(2),2);
+      if(i===1) cells+=num(r,1,(+it.valor||0).toFixed(2),2);
+      else if(i===3) cells+=d!=null?num(r,3,d,1):str(r,3,it.data||"");
       else if(v!=null&&v!=="") cells+=str(r,i,v);
     });
     rows+=`<row r="${r}">${cells}</row>`;});

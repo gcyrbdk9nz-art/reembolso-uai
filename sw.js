@@ -1,5 +1,5 @@
 // Reembolso UAI — offline support. Bump VERSION on every release.
-const VERSION = "v1-2026-11-27";
+const VERSION = "v2-2026-11-27";
 const CORE = [
   "./", "index.html", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",
