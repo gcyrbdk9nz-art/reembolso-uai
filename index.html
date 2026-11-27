@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Reembolso UAI</title>
+<meta name="theme-color" content="#141414">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Reembolso">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;700&display=swap">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+img{max-width:100%}
+/* Layout: one narrow column; dark app chrome, the expense list printed as a paper till receipt (option C "Cupom"). Deliberately dark-only. */
+:root{
+  --bg:#141414; --paper:#1d1d1d; --ink:#f4f4ef; --muted:#a3a39b; --line:#34342f;
+  --accent:#2bd67b; --accent-ink:#0d0d0d; --accent-soft:#163d27;
+  --warn:#f0b454; --warn-soft:#3a2c12; --danger:#ff8a80; --danger-soft:#3d1a17;
+  --rc-paper:#f4f4ef; --rc-ink:#111111; --rc-muted:#5b5b55; --rc-line:#b9b9b0;
+  --f-display:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px dashed var(--line)}
+.logo{width:48px;height:48px;border-radius:13px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font:700 1.05rem var(--f-body);letter-spacing:-.02em;flex:none}
+header h1{font:700 1.55rem/1.1 var(--f-display);margin:0;letter-spacing:-.01em}
+header p{margin:.15rem 0 0;color:var(--muted);font-size:.9rem}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px}
+.card h2{font:600 1.05rem/1.2 var(--f-display);margin:0;display:flex;align-items:center;gap:8px}
+.step{font:500 .72rem var(--f-mono);color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:2px 8px;letter-spacing:.04em}
+button,.btn{font:600 1rem var(--f-body);border-radius:10px;border:1px solid var(--line);background:var(--paper);color:var(--ink);padding:12px 14px;cursor:pointer;min-height:46px;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-align:center}
+button:focus-visible,.btn:focus-within,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:disabled{opacity:.55;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>*{flex:1 1 160px}
+.btn input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.btn{position:relative}
+.link{background:none;border:none;color:var(--accent);padding:4px 0;min-height:0;font-weight:500;text-decoration:underline;text-underline-offset:3px}
+#preview{display:flex;gap:12px;align-items:flex-start}
+#preview img{width:84px;height:112px;object-fit:cover;border-radius:8px;border:1px solid var(--line);flex:none}
+#status{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;font-size:.92rem}
+.bar{height:6px;background:var(--line);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.note{font-size:.88rem;color:var(--muted)}
+.chip{display:inline-block;font:500 .7rem var(--f-mono);padding:1px 7px;border-radius:999px;background:var(--accent-soft);color:var(--accent);letter-spacing:.03em;vertical-align:middle}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f.full{grid-column:1/-1}
+.f label{font-size:.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:flex;gap:6px;align-items:center}
+input,select,textarea{font:16px var(--f-body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 11px;width:100%;min-width:0}
+input.money,input.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.f.empty input,.f.empty select{border-color:var(--warn);background:var(--warn-soft)}
+@media (max-width:420px){form{grid-template-columns:1fr}}
+.alert{border-radius:10px;padding:10px 12px;font-size:.9rem;background:var(--warn-soft);color:var(--ink);border:1px solid var(--warn)}
+.alert.err{background:var(--danger-soft);border-color:var(--danger)}
+.ledger{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.ledger li{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:12px 0;border-bottom:1px dashed var(--line)}
+.ledger .who{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.ledger .val{font:500 1rem var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+.ledger .meta{color:var(--muted);font-size:.85rem;min-width:0;overflow-wrap:anywhere}
+.ledger .act{display:flex;gap:16px;justify-content:flex-end;grid-column:1/-1}
+.ledger .meta{grid-column:1/-1}
+.ledger .act button{min-height:0;padding:2px 0;border:none;background:none;color:var(--muted);font-weight:500;font-size:.85rem;text-decoration:underline}
+.ledger .act button.confirm{color:var(--danger)}
+.total{display:flex;justify-content:space-between;align-items:baseline;padding-top:6px;border-top:2px solid var(--ink)}
+.total b{font:600 1.3rem var(--f-mono);font-variant-numeric:tabular-nums}
+.ledger li.has-foto{grid-template-columns:44px 1fr auto}
+.ledger li.has-foto .ph{grid-row:1/4;width:44px;height:58px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.ledger li.has-foto .meta,.ledger li.has-foto .act{grid-column:2/4}
+.st{font:500 .7rem var(--f-mono);padding:1px 7px;border-radius:999px;margin-left:6px;vertical-align:middle;white-space:nowrap}
+.st.pend{background:var(--warn-soft);color:var(--warn)}
+.st.ok{background:var(--accent-soft);color:var(--accent)}
+/* The expense list is a printed receipt */
+#list{--paper:var(--rc-paper);--ink:var(--rc-ink);--muted:var(--rc-muted);--line:var(--rc-line);
+  --accent:#0d7a43;--accent-ink:#ffffff;--accent-soft:#d5f3e2;--warn:#7a4f00;--warn-soft:#fbe7bf;--danger:#b3261e;--danger-soft:#fbe3e1;
+  color-scheme:light;color:var(--ink);font-family:var(--f-mono);border:none;border-radius:6px 6px 0 0;padding-bottom:30px;
+  -webkit-mask:radial-gradient(circle 6px at 50% 100%,#0000 97%,#000) 0 0/14px 100% repeat-x;mask:radial-gradient(circle 6px at 50% 100%,#0000 97%,#000) 0 0/14px 100% repeat-x}
+#list .ledger .who{text-transform:uppercase;font-weight:500}
+#list .note,#list button{font-family:var(--f-body)}
+#list .total{border-top:1px dashed var(--ink)}
+.empty-state{color:var(--muted);text-align:center;padding:18px 8px;border:1px dashed var(--line);border-radius:10px}
+details{font-size:.9rem;color:var(--muted)}
+details summary{cursor:pointer;color:var(--ink);font-weight:500}
+details ul{padding-left:1.1rem;margin:.5rem 0}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-weight:500;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+</head><body>
+<div class="wrap">
+  <header>
+    <div class="logo" aria-hidden="true">UAI</div>
+    <div><h1>Reembolso</h1><p>Fotografe a nota, confira e baixe a planilha.</p></div>
+  </header>
+
+  <section class="card" id="capture">
+    <h2><span class="step">1</span> Foto da nota</h2>
+    <div class="row">
+      <label class="btn primary" for="cam">Tirar foto<input id="cam" type="file" accept="image/*" capture="environment"></label>
+      <label class="btn" for="gal">Escolher foto ou PDF<input id="gal" type="file" accept="image/*,application/pdf,.pdf"></label>
+    </div>
+    <div id="preview" hidden>
+      <img id="thumb" alt="Foto da nota">
+      <div id="status">
+        <div id="statusText">Lendo a nota…</div>
+        <div class="bar"><i id="barFill"></i></div>
+        <div id="qrInfo" class="note" hidden></div>
+      </div>
+    </div>
+    <button type="button" class="link" id="demo">Testar com uma nota fictícia</button>
+  </section>
+
+  <section class="card" id="review">
+    <h2><span class="step">2</span> Conferir e salvar</h2>
+    <p class="note" id="reviewHint">Os campos são preenchidos pela leitura. Confira tudo antes de salvar: a leitura automática pode errar.</p>
+    <form id="form" autocomplete="off">
+      <div class="f full" data-k="estabelecimento"><label for="f-est">Estabelecimento <span class="chip" hidden></span></label><input id="f-est" name="estabelecimento" required></div>
+      <div class="f" data-k="cnpj"><label for="f-cnpj">CNPJ <span class="chip" hidden></span></label><input id="f-cnpj" name="cnpj" class="mono" inputmode="numeric" placeholder="00.000.000/0000-00"></div>
+      <div class="f" data-k="data"><label for="f-data">Data <span class="chip" hidden></span></label><input id="f-data" name="data" type="date" required></div>
+      <div class="f" data-k="valor"><label for="f-valor">Montante <span class="chip" hidden></span></label><input id="f-valor" name="valor" class="money" inputmode="decimal" placeholder="0,00" required></div>
+      <div class="f" data-k="pagamento"><label for="f-pag">Pagamento <span class="chip" hidden></span></label>
+        <select id="f-pag" name="pagamento"><option value="">Selecione</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Vale-refeição</option><option>PIX</option><option>Dinheiro</option><option>Outro</option></select></div>
+      <div class="f" data-k="moeda"><label for="f-moeda">Moeda</label>
+        <select id="f-moeda" name="moeda"><option value="BRL" selected>BRL (R$)</option><option value="USD">USD (US$)</option><option value="EUR">EUR (€)</option></select></div>
+      <div class="f" data-k="categoria"><label for="f-cat">Categoria <span class="chip" hidden></span></label>
+        <select id="f-cat" name="categoria"><option value="">Selecione</option></select></div>
+      <div class="f full"><label for="f-obs">Observação</label><input id="f-obs" name="obs" placeholder="Ex.: almoço com cliente"></div>
+      <input type="hidden" id="f-chave" name="chave">
+      <div id="formErr" class="alert err full" hidden style="grid-column:1/-1"></div>
+      <div class="row" style="grid-column:1/-1"><button type="button" id="clear">Limpar</button><button class="primary" type="submit" id="save">Salvar despesa</button></div>
+    </form>
+  </section>
+
+  <section class="card" id="list">
+    <h2><span class="step">3</span> CUPOM DE DESPESAS <span class="note" id="storeNote" style="font-weight:400;font-family:var(--f-body)"></span></h2>
+    <ul class="ledger" id="ledger"></ul>
+    <div class="empty-state" id="empty">Nenhuma despesa salva ainda. Tire a foto de uma nota ou use a nota fictícia para testar.</div>
+    <div class="total" id="totalRow" hidden><span>Total</span><b id="total">R$ 0,00</b></div>
+    <p class="note">A planilha sai no formato da tabela <b>NotasViagem</b>: Estabelecimento, Data, Montante, Moeda, Categoria, Status e FOTOS_PREST_CONTAS, mais CNPJ, pagamento, observação e chave da NFC-e no fim.</p>
+    <div class="row">
+      <button class="primary" type="button" id="xlsx" disabled>Baixar planilha (.xlsx)</button>
+      <button type="button" id="zip" disabled>Planilha + fotos (.zip)</button>
+    </div>
+    <div id="dlMsg" class="alert" hidden></div>
+    <button type="button" class="link" id="limpar" hidden style="align-self:center;color:var(--muted)">Limpar lista…</button>
+    <div id="limparBox" class="alert" hidden>
+      <div style="margin-bottom:8px">O que você quer apagar? As fotos dessas notas também são apagadas e isso não pode ser desfeito.</div>
+      <div class="row">
+        <button type="button" id="limparLanc">Só as lançadas (<span id="nLanc">0</span>)</button>
+        <button type="button" id="limparTudo" style="color:var(--danger);border-color:var(--danger)">Apagar todas</button>
+      </div>
+      <button type="button" class="link" id="limparCancel" style="margin-top:6px">Cancelar</button>
+    </div>
+  </section>
+
+  <details>
+    <summary>Como usar no iPhone e limites desta versão</summary>
+    <ul>
+      <li>Para ter o ícone na tela: abra no Safari, toque em Compartilhar e depois em “Adicionar à Tela de Início”. Depois da primeira abertura, funciona até sem internet.</li>
+      <li>Suas notas e fotos ficam só neste aparelho. Ninguém mais vê. Se apagar os dados do navegador ou trocar de celular, elas se perdem: baixe a planilha com frequência.</li>
+      <li>A leitura gratuita roda no próprio celular e erra com nota amassada, apagada ou torta. Por isso a conferência é obrigatória.</li>
+      <li>O QR code da NFC-e dá o CNPJ e o mês da nota. O site da SEFAZ não deixa esta página consultar a nota direto; o link “Abrir na SEFAZ” mostra a nota completa para você conferir.</li>
+      <li>A foto de cada nota fica guardada no aparelho, junto da despesa. O arquivo .zip traz a planilha e a pasta FOTOS; a coluna FOTOS_PREST_CONTAS indica o arquivo de cada nota.</li>
+      <li>Depois de lançar no SAP, toque em “Marcar lançada” para não lançar a mesma nota duas vezes.</li>
+    </ul>
+  </details>
+</div>
+<div id="toast" hidden></div>
+
+<script src="vendor/jsQR.js"></script>
+<script src="vendor/tesseract/tesseract.min.js"></script>
+<script src="vendor/pdf.min.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const brl = n => (Number(n)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const abs = p => new URL(p, location.href).href;
+function toast(msg){const t=$("toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+
+/* ---------- Parsing helpers (exported on window for tests) ---------- */
+function onlyDigits(s){return String(s||"").replace(/\D/g,"")}
+function cnpjValid(c){
+  c=onlyDigits(c); if(c.length!==14||/^(\d)\1+$/.test(c)) return false;
+  const calc=(len)=>{const w=len===12?[5,4,3,2,9,8,7,6,5,4,3,2]:[6,5,4,3,2,9,8,7,6,5,4,3,2];
+    let s=0;for(let i=0;i<len;i++) s+=+c[i]*w[i]; const r=s%11; return r<2?0:11-r};
+  return calc(12)===+c[12] && calc(13)===+c[13];
+}
+function fmtCnpj(c){c=onlyDigits(c);return c.length===14?c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,"$1.$2.$3/$4-$5"):c}
+function parseMoney(s){ // "1.234,56" -> 1234.56 ; "45.90" -> 45.9
+  s=String(s||"").trim().replace(/[R$\s]/g,""); if(!s) return NaN;
+  if(/,\d{1,2}$/.test(s)) s=s.replace(/\./g,"").replace(",",".");
+  else s=s.replace(/,/g,"");
+  return parseFloat(s);
+}
+function moneyStr(n){return isFinite(n)?n.toFixed(2).replace(".",","):""}
+
+/* NFC-e QR code: ?p=CHAVE|versao|tpAmb|... (v2/v3) or old ?chNFe=...&dhEmi=hex&vNF= */
+function parseNfceQr(text){
+  const out={url:null,chave:null};
+  if(!text) return null;
+  const t=text.trim();
+  if(/^https:\/\//i.test(t)) out.url=t;
+  let m=t.match(/[?&]p=([^&]+)/i);
+  if(m){
+    const parts=decodeURIComponent(m[1]).split("|");
+    if(/^\d{44}$/.test(parts[0])) out.chave=parts[0];
+    // offline emission: CHAVE|ver|tpAmb|dia|valor|...
+    if(parts.length>=5 && /^\d{1,2}$/.test(parts[3]) && /^\d+(\.\d{1,2})?$/.test(parts[4])){out.dia=+parts[3];out.valor=parseFloat(parts[4]);}
+  } else {
+    m=t.match(/chNFe=(\d{44})/i); if(m) out.chave=m[1];
+    m=t.match(/vNF=([\d.]+)/i); if(m) out.valor=parseFloat(m[1]);
+    m=t.match(/dhEmi=([0-9a-f]+)/i);
+    if(m){try{const iso=m[1].match(/../g).map(h=>String.fromCharCode(parseInt(h,16))).join("");const d=iso.match(/^(\d{4})-(\d{2})-(\d{2})/);if(d) out.dataIso=`${d[1]}-${d[2]}-${d[3]}`;}catch(e){}}
+  }
+  if(!out.chave){const k=onlyDigits(t).match(/\d{44}/);if(k&&/nfc|nfe|sefaz|fazenda/i.test(t)) out.chave=k[0];}
+  if(!out.chave) return null;
+  const c=out.chave;
+  out.uf=c.slice(0,2); out.aa=+c.slice(2,4); out.mm=+c.slice(4,6);
+  out.cnpj=c.slice(6,20); out.modelo=c.slice(20,22); out.numero=String(+c.slice(25,34));
+  if(out.dia && !out.dataIso){const y=2000+out.aa;out.dataIso=`${y}-${String(out.mm).padStart(2,"0")}-${String(out.dia).padStart(2,"0")}`;}
+  return out;
+}
+
+function parseReceiptText(raw){
+  const r={};
+  const lines=String(raw||"").split(/\r?\n/).map(l=>l.replace(/\s+/g," ").trim()).filter(Boolean);
+  const all=lines.join("\n");
+  // CNPJ: prefer a valid one
+  const cands=[...all.matchAll(/(\d{2}\s?[.,]?\s?\d{3}\s?[.,]?\s?\d{3}\s?\/?\s?\d{4}\s?-?\s?\d{2})/g)].map(m=>onlyDigits(m[1])).filter(d=>d.length===14);
+  const valid=cands.find(cnpjValid); if(valid||cands[0]) r.cnpj=fmtCnpj(valid||cands[0]);
+  // Date: first dd/mm/yyyy, prefer one on an "emissão" line
+  const dRe=/(\d{2})[\/.-](\d{2})[\/.-](\d{4})/;
+  const emLine=lines.find(l=>/emiss|data/i.test(l)&&dRe.test(l));
+  const dm=(emLine||all).match(dRe);
+  if(dm){const d=+dm[1],mo=+dm[2],y=+dm[3]; if(d>=1&&d<=31&&mo>=1&&mo<=12&&y>=2000&&y<=2100) r.data=`${y}-${dm[2]}-${dm[1]}`;}
+  // Total
+  const mRe=/(\d{1,3}(?:[.\s]\d{3})*,\s?\d{2})(?!\d)/g;
+  const lastMoney=l=>{const ms=[...l.matchAll(mRe)];return ms.length?parseMoney(ms[ms.length-1][1].replace(/\s/g,"")):NaN};
+  const prio=[/valor\s*a\s*pagar/i,/valor\s*total/i,/total\s*(geral|a\s*pagar|r\$)/i,/^total\b/i,/\btotal\b/i];
+  for(const re of prio){
+    for(let i=0;i<lines.length;i++){
+      const l=lines[i]; if(!re.test(l)||/itens|qtd|qtde|tribut|desconto|acr[eé]sc/i.test(l)) continue;
+      let v=lastMoney(l); if(!isFinite(v)&&lines[i+1]) v=lastMoney(lines[i+1]);
+      if(isFinite(v)&&v>0){r.valor=v;break}
+    }
+    if(r.valor) break;
+  }
+  if(!r.valor){const vs=[...all.matchAll(mRe)].map(m=>parseMoney(m[1].replace(/\s/g,""))).filter(v=>v>0&&v<100000);if(vs.length) r.valor=Math.max(...vs)}
+  // Payment
+  const low=all.toLowerCase();
+  if(/vale.?refei|vale.?alimenta|\bvr\b|ticket|alelo|sodexo|pluxee|\bvb\b|\bflash\b|\bcaju\b/.test(low)) r.pagamento="Vale-refeição";
+  else if(/d[eé]bito/.test(low)) r.pagamento="Cartão de débito";
+  else if(/cr[eé]dito/.test(low)) r.pagamento="Cartão de crédito";
+  else if(/\bpix\b/.test(low)) r.pagamento="PIX";
+  else if(/dinheiro/.test(low)) r.pagamento="Dinheiro";
+  // Establishment: first meaningful line before the CNPJ line
+  const cIdx=lines.findIndex(l=>/cnpj/i.test(l));
+  const skip=/danfe|documento|auxiliar|nota fiscal|consumidor|cnpj|^ie\b|inscri|cupom|extrato|sat\b|www|http/i;
+  const pool=(cIdx>0?lines.slice(0,cIdx):lines.slice(0,4));
+  const est=pool.find(l=>(l.match(/[A-Za-zÀ-ú]/g)||[]).length>=5&&!skip.test(l));
+  if(est) r.estabelecimento=est.replace(/^[^A-Za-zÀ-ú0-9]+|[^A-Za-zÀ-ú0-9.)]+$/g,"");
+  return r;
+}
+const CATEGORIAS=["Restaurante","Lanchonete","Bar","Comércio","Posto de combustível","Locadora de carros","Hotel","Transporte","Outros"];
+const CAT_RULES=[
+  ["Posto de combustível",/posto|combust|gasolina|etanol|diesel|auto ?posto|ipiranga|petrobras|\bshell\b|br mania/],
+  ["Locadora de carros",/locadora|localiza|movida|unidas|rent ?a ?car|hertz/],
+  ["Hotel",/hotel|pousada|hostel|\bibis\b|\bflat\b|resort|hospedagem/],
+  ["Transporte",/\buber\b|\b99\b|t[aá]xi|estacionamento|ped[aá]gio|metr[oô]|[oô]nibus|rodovi[aá]ria|passagem/],
+  ["Bar",/\bbar\b|boteco|choperia|chopp|\bpub\b|cervej/],
+  ["Lanchonete",/lanchonete|lanches|burger|hamb[uú]rg|pastel|pastelaria|salgad|snack|mc ?donald|subway|habib|padaria|panifica|confeitaria|doceria|sorvet|a[cç]a[ií]|cafeteria|\bcaf[eé]\b|coffee|starbucks/],
+  ["Restaurante",/restaurante|churrasc|cantina|bistr|grill|pizz|sushi|temaki|japon|self|refei[cç]|buffet|steak|trattoria|cozinha|sabor|comida|galeto|marmit|lanchonete e restaurante/],
+  ["Comércio",/mercado|supermerc|farm[aá]cia|drogaria|\bloja|atacad|com[eé]rcio|magazine|empório|emporio/]
+];
+function sugerirCategoria(nome){const t=String(nome||"").toLowerCase();for(const [c,re] of CAT_RULES) if(re.test(t)) return c;return ""}
+window.__test={sugerirCategoria,parseReceiptText,parseNfceQr,cnpjValid,parseMoney};
+
+/* ---------- Image handling ---------- */
+let currentBlob=null, runId=0;
+function loadImage(blob){return new Promise((res,rej)=>{const u=URL.createObjectURL(blob);const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error("img"));i.src=u;})}
+function toCanvas(img,max){const s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);c.getContext("2d").drawImage(img,0,0,c.width,c.height);return c}
+function findQr(img){
+  if(typeof jsQR!=="function") return null;
+  for(const max of [1400,900,2200]){
+    const c=toCanvas(img,max);const d=c.getContext("2d").getImageData(0,0,c.width,c.height);
+    const q=jsQR(d.data,c.width,c.height,{inversionAttempts:"attemptBoth"});
+    if(q&&q.data) return q.data;
+  }
+  return null;
+}
+function grayscale(c){const x=c.getContext("2d");const d=x.getImageData(0,0,c.width,c.height);const p=d.data;
+  for(let i=0;i<p.length;i+=4){let g=.299*p[i]+.587*p[i+1]+.114*p[i+2];g=Math.max(0,Math.min(255,(g-128)*1.35+128));p[i]=p[i+1]=p[i+2]=g}
+  x.putImageData(d,0,0);return c}
+
+let workerP=null;
+function withTimeout(p,ms){return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))])}
+function getWorker(onProg){
+  if(!workerP){
+    if(!window.Tesseract) return Promise.reject(new Error("ocr-lib"));
+    workerP=withTimeout(Tesseract.createWorker("por",1,{
+        workerPath:abs("vendor/tesseract/worker.min.js"),corePath:abs("vendor/tesseract/"),langPath:abs("vendor/tesseract/lang"),
+        workerBlobURL:false,gzip:true,cacheMethod:"none",
+        logger:m=>getWorker._cb&&getWorker._cb(m)
+      }),90000);
+    workerP.catch(()=>{workerP=null});
+  }
+  getWorker._cb=onProg;
+  return workerP;
+}
+
+function setStatus(text,pct){$("statusText").textContent=text;if(pct!=null)$("barFill").style.width=Math.round(pct*100)+"%"}
+
+/* PDF (scanned or digital): render up to 3 pages, stacked, into one JPEG and treat it as a photo */
+async function pdfToImage(file){
+  const lib=window.pdfjsLib; if(!lib) throw new Error("pdf-lib");
+  lib.GlobalWorkerOptions.workerSrc=abs("vendor/pdf.worker.min.js");
+  const pdf=await lib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+  const pages=[];
+  for(let i=1;i<=Math.min(pdf.numPages,3);i++){
+    const pg=await pdf.getPage(i);const v0=pg.getViewport({scale:1});
+    const scale=Math.min(1600/v0.width,9000/v0.height,4);const v=pg.getViewport({scale});
+    const c=document.createElement("canvas");c.width=Math.round(v.width);c.height=Math.round(v.height);
+    const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);
+    await pg.render({canvasContext:x,viewport:v}).promise;pages.push(c);
+  }
+  const W=Math.max(...pages.map(c=>c.width)),H=pages.reduce((s,c)=>s+c.height,0);
+  const out=document.createElement("canvas");out.width=W;out.height=H;const ox=out.getContext("2d");
+  ox.fillStyle="#fff";ox.fillRect(0,0,W,H);let y=0;for(const c of pages){ox.drawImage(c,0,y);y+=c.height}
+  return await new Promise(r=>out.toBlob(r,"image/jpeg",0.9));
+}
+function isPdf(f){return f&&(f.type==="application/pdf"||/\.pdf$/i.test(f.name||""))}
+async function handleFile(f){
+  if(!isPdf(f)) return handleImage(f);
+  $("preview").hidden=false;$("thumb").removeAttribute("src");$("qrInfo").hidden=true;setStatus("Abrindo o PDF…",0.03);
+  try{const b=await pdfToImage(f);if(!b) throw new Error("blob");return handleImage(b)}
+  catch(e){console.error(e);setStatus("Não consegui abrir este PDF. Tente tirar uma foto da nota.",0)}
+}
+window.__test.pdfToImage=pdfToImage;
+
+async function handleImage(blob){
+  const my=++runId; currentBlob=blob;
+  $("preview").hidden=false; $("thumb").src=URL.createObjectURL(blob);
+  $("qrInfo").hidden=true; setStatus("Procurando QR code…",0.05);
+  resetForm(false);
+  let img; try{img=await loadImage(blob)}catch(e){setStatus("Não consegui abrir esta imagem. Tente outra foto.",0);return}
+  // 1) QR
+  const qrText=findQr(img); const qr=parseNfceQr(qrText);
+  if(qr){
+    const f={cnpj:fmtCnpj(qr.cnpj),chave:qr.chave};
+    if(qr.dataIso) f.data=qr.dataIso; if(qr.valor) f.valor=qr.valor;
+    fill(f,"QR");
+    const info=$("qrInfo"); info.textContent="";
+    info.append(`QR da NFC-e lido: nota nº ${qr.numero}, ${String(qr.mm).padStart(2,"0")}/20${String(qr.aa).padStart(2,"0")}. `);
+    if(qr.url){const a=document.createElement("a");a.href=qr.url;a.target="_blank";a.rel="noopener";a.textContent="Abrir na SEFAZ";info.append(a)}
+    info.hidden=false;
+  }
+  // 2) OCR
+  setStatus("Lendo o texto da nota… (a primeira vez demora mais)",0.1);
+  try{
+    const w=await getWorker(m=>{if(my!==runId) return;
+      if(m.status==="recognizing text") setStatus("Lendo o texto da nota…",0.3+0.7*m.progress);
+      else if(/load/.test(m.status)) setStatus("Preparando a leitura (só na primeira vez)…",0.1+0.2*(m.progress||0));});
+    const sc=Math.min(1,1500/img.naturalWidth,7000/img.naturalHeight);
+    const c=grayscale(toCanvas(img,Math.max(img.naturalWidth,img.naturalHeight)*sc));
+    const {data}=await withTimeout(w.recognize(c),90000);
+    if(my!==runId) return;
+    const r=(data.text||"").replace(/\s/g,"").length>=30?parseReceiptText(data.text):{};
+    // QR is more reliable for CNPJ; keep it if present
+    if(qr) delete r.cnpj;
+    fill(r,"leitura");
+    if(qr&&r.data){const [y,m]=r.data.split("-").map(Number);if(y!==2000+qr.aa||m!==qr.mm) markWarn("data","confira");}
+    const miss=["estabelecimento","data","valor"].filter(k=>!fieldVal(k));
+    setStatus(miss.length?"Leitura feita. Complete os campos em amarelo.":"Leitura feita. Confira os campos abaixo.",1);
+  }catch(e){
+    if(my!==runId) return;
+    console.error(e);
+    setStatus(qr?"Li o QR code, mas a leitura do texto falhou. Complete os campos.":"A leitura automática falhou neste aparelho. Preencha os campos abaixo.",1);
+  }
+  markEmpty();
+  $("review").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});
+}
+
+/* ---------- Form ---------- */
+const map={estabelecimento:"f-est",cnpj:"f-cnpj",data:"f-data",valor:"f-valor",pagamento:"f-pag",chave:"f-chave",categoria:"f-cat",moeda:"f-moeda"};
+for(const c of CATEGORIAS){const o=document.createElement("option");o.textContent=c;$("f-cat").append(o)}
+let catManual=false;
+function autoCategoria(){if(catManual) return;const c=sugerirCategoria(fieldVal("estabelecimento"))||(fieldVal("estabelecimento")?"Restaurante":"");
+  if(c&&$("f-cat").value!==c){$("f-cat").value=c;const ch=chipOf("categoria");ch.textContent="sugerida";ch.className="chip";ch.hidden=false}}
+$("f-cat").addEventListener("change",()=>{catManual=true;chipOf("categoria").hidden=true});
+$("f-est").addEventListener("input",autoCategoria);
+function fieldVal(k){return $(map[k]).value.trim()}
+function chipOf(k){return document.querySelector(`.f[data-k="${k}"] .chip`)}
+function fill(obj,src){
+  for(const [k,v] of Object.entries(obj)){
+    if(v==null||v===""||!map[k]) continue;
+    $(map[k]).value = k==="valor"?moneyStr(v):v;
+    const ch=chipOf(k); if(ch){ch.textContent=src;ch.className="chip";ch.hidden=false}
+  }
+  if(obj.estabelecimento) autoCategoria();
+  markEmpty();
+}
+function markWarn(k,txt){const ch=chipOf(k);if(ch){ch.textContent=txt;ch.className="chip warn";ch.hidden=false}}
+function markEmpty(){document.querySelectorAll(".f[data-k]").forEach(f=>{const k=f.dataset.k;f.classList.toggle("empty",["estabelecimento","data","valor","categoria"].includes(k)&&!fieldVal(k))})}
+function resetForm(all=true){
+  $("form").reset(); $("f-chave").value=""; $("formErr").hidden=true; catManual=false;
+  document.querySelectorAll(".f .chip").forEach(c=>c.hidden=true);
+  document.querySelectorAll(".f.empty").forEach(f=>f.classList.remove("empty"));
+  if(all){$("preview").hidden=true;currentBlob=null;runId++}
+}
+$("form").addEventListener("input",markEmpty);
+$("clear").onclick=()=>resetForm(true);
+$("f-cnpj").addEventListener("blur",e=>{const d=onlyDigits(e.target.value);if(d.length===14){e.target.value=fmtCnpj(d);if(!cnpjValid(d))markWarn("cnpj","inválido?")}});
+$("f-valor").addEventListener("blur",e=>{const v=parseMoney(e.target.value);if(isFinite(v))e.target.value=moneyStr(v)});
+
+$("form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const err=$("formErr");
+  const valor=parseMoney($("f-valor").value);
+  const probs=[];
+  if(!fieldVal("estabelecimento")) probs.push("estabelecimento");
+  if(!fieldVal("data")) probs.push("data");
+  if(!(valor>0)) probs.push("montante");
+  if(!$("f-cat").value) probs.push("categoria");
+  if(probs.length){err.textContent="Preencha: "+probs.join(", ")+".";err.hidden=false;markEmpty();return}
+  err.hidden=true;
+  const rec={estabelecimento:fieldVal("estabelecimento"),cnpj:fieldVal("cnpj"),data:fieldVal("data"),valor:Math.round(valor*100)/100,
+    moeda:$("f-moeda").value||"BRL",categoria:$("f-cat").value,status:"Pendente",
+    pagamento:$("f-pag").value,obs:$("f-obs").value.trim(),chave:$("f-chave").value,criadoEm:new Date().toISOString()};
+  $("save").disabled=true;
+  let semFoto=false;
+  if(currentBlob){
+    try{rec.foto=await salvarFoto(currentBlob)}catch(x){console.warn(x)}
+    if(!rec.foto) semFoto=true;
+  }
+  try{await store.add(rec);toast(semFoto?"Despesa salva, mas a foto não foi guardada":"Despesa salva");resetForm(true);window.scrollTo({top:$("list").offsetTop-10,behavior:"auto"})}
+  catch(x){err.textContent="Não consegui salvar. Tente de novo.";err.hidden=false;console.error(x)}
+  finally{$("save").disabled=false}
+});
+
+/* ---------- Local database (IndexedDB): everything stays on this phone ---------- */
+const DB=(()=>{let p=null;
+  function open(){if(!p)p=new Promise((res,rej)=>{const r=indexedDB.open("reembolso-uai",1);
+    r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains("despesas"))d.createObjectStore("despesas",{keyPath:"id"});if(!d.objectStoreNames.contains("fotos"))d.createObjectStore("fotos")};
+    r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});return p}
+  async function tx(st,mode,fn){const d=await open();return new Promise((res,rej)=>{const t=d.transaction(st,mode);const o=t.objectStore(st);let out;
+    const q=fn(o);if(q)q.onsuccess=()=>{out=q.result};t.oncomplete=()=>res(out);t.onerror=t.onabort=()=>rej(t.error)})}
+  return{all:()=>tx("despesas","readonly",o=>o.getAll()),put:v=>tx("despesas","readwrite",o=>o.put(v)),del:k=>tx("despesas","readwrite",o=>o.delete(k)),
+    getFoto:k=>tx("fotos","readonly",o=>o.get(k)),putFoto:(k,b)=>tx("fotos","readwrite",o=>o.put(b,k)),delFoto:k=>tx("fotos","readwrite",o=>o.delete(k))};
+})();
+const fotoURLs=new Map();
+async function fotoURL(id){if(fotoURLs.has(id))return fotoURLs.get(id);const b=await DB.getFoto(id).catch(()=>null);const u=b?URL.createObjectURL(b):"";fotoURLs.set(id,u);return u}
+async function salvarFoto(blob){
+  const img=await loadImage(blob);
+  const jpg=await new Promise(r=>toCanvas(img,1600).toBlob(r,"image/jpeg",0.8));
+  const id="f"+Date.now()+Math.random().toString(36).slice(2,6);
+  await DB.putFoto(id,jpg);
+  return {id};
+}
+async function apagarFoto(f){if(f&&f.id){try{await DB.delFoto(f.id)}catch(e){};const u=fotoURLs.get(f.id);if(u)URL.revokeObjectURL(u);fotoURLs.delete(f.id)}}
+function nomeFoto(it){
+  const base=(it.estabelecimento||"nota").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^A-Za-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,40)||"nota";
+  return `${it.data||"sem-data"}_${base}_${String(Number(it.valor||0).toFixed(2)).replace(".",",")}_${String(it.id).slice(-4)}.jpg`;
+}
+function fotoPath(it){return it.foto?"FOTOS/"+nomeFoto(it):""}
+
+/* ---------- Expense list ---------- */
+const store={items:[],
+  async init(){
+    try{this.items=await DB.all()}catch(e){console.error(e);this.items=[];toast("Não consegui abrir os dados deste aparelho")}
+    // Old browser-only list (first versions) moves into the database once
+    try{const old=JSON.parse(lsGet("despesas")||"[]");if(old.length){for(const o of old){if(!this.items.find(i=>i.id===o.id)){delete o.foto;await DB.put(o);this.items.push(o)}}localStorage.removeItem("despesas")}}catch(e){}
+    render();
+    try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+  },
+  async add(rec){rec.id="d"+Date.now()+Math.random().toString(36).slice(2,6);await DB.put(rec);this.items.push(rec);render()},
+  async update(id,patch){const it=this.items.find(i=>i.id===id);if(!it)return;const n={...it,...patch};await DB.put(n);Object.assign(it,patch);render()},
+  async remove(id){await DB.del(id);this.items=this.items.filter(i=>i.id!==id);render()}
+};
+function fmtDate(iso){const m=String(iso||"").match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}/${m[2]}/${m[1]}`:iso||""}
+function sorted(){return [...store.items].sort((a,b)=>String(a.data).localeCompare(String(b.data))||String(a.criadoEm).localeCompare(String(b.criadoEm)))}
+function render(){
+  const ul=$("ledger"); ul.textContent="";
+  const items=sorted();
+  for(const it of items){
+    const li=document.createElement("li");
+    const who=document.createElement("div");who.className="who";who.textContent=it.estabelecimento||"(sem nome)";
+    const val=document.createElement("div");val.className="val";val.textContent=brl(it.valor);
+    const meta=document.createElement("div");meta.className="meta";
+    meta.textContent=[fmtDate(it.data),it.pagamento,it.obs].filter(Boolean).join(" · ");
+    const act=document.createElement("div");act.className="act";
+    const del=document.createElement("button");del.type="button";del.textContent="Excluir";
+    del.onclick=async()=>{if(!del.classList.contains("confirm")){del.classList.add("confirm");del.textContent="Toque de novo para excluir";setTimeout(()=>{del.classList.remove("confirm");del.textContent="Excluir"},3500);return}
+      try{await store.remove(it.id);toast("Despesa excluída");
+        await apagarFoto(it.foto)}catch(e){toast("Não consegui excluir")}};
+    const lanc=it.status==="Lançada";
+    const st=document.createElement("span");st.className="st "+(lanc?"ok":"pend");st.textContent=lanc?"Lançada":"Pendente";who.append(st);
+    const tog=document.createElement("button");tog.type="button";tog.textContent=lanc?"Voltar para pendente":"Marcar lançada";
+    tog.onclick=async()=>{try{await store.update(it.id,{status:lanc?"Pendente":"Lançada"})}catch(e){toast("Não consegui atualizar")}};
+    act.append(tog,del);
+    if(it.foto&&it.foto.id){li.classList.add("has-foto");const ph=document.createElement("img");ph.className="ph";ph.alt="Foto da nota";fotoURL(it.foto.id).then(u=>{if(u)ph.src=u});li.append(ph)}
+    meta.textContent=[fmtDate(it.data),it.categoria,it.moeda&&it.moeda!=="BRL"?it.moeda:"",it.pagamento,it.obs].filter(Boolean).join(" · ");
+    li.append(who,val,meta,act); ul.append(li);
+  }
+  const total=items.reduce((s,i)=>s+(+i.valor||0),0);
+  $("total").textContent=brl(total);
+  $("empty").hidden=items.length>0; $("totalRow").hidden=!items.length;
+  $("xlsx").disabled=!items.length; $("zip").disabled=!items.some(i=>i.foto);
+  $("limpar").hidden=!items.length||!$("limparBox").hidden; if(!items.length) $("limparBox").hidden=true;
+  const nl=items.filter(i=>i.status==="Lançada").length; $("nLanc").textContent=nl; $("limparLanc").disabled=!nl;
+  $("storeNote").textContent=items.length?`(${items.length})`:"";
+}
+
+/* ---------- Excel (real .xlsx with table "NotasViagem", written by hand: no library) ---------- */
+const COLS=[["Estabelecimento",34],["Data",12],["Montante",13],["Moeda",8],["Categoria",20],["Status",11],["FOTOS_PREST_CONTAS",48],["CNPJ",20],["Forma de pagamento",19],["Observação",30],["Chave de acesso NFC-e",48]];
+const enc=new TextEncoder();
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function zip(files){ // [{name, data:Uint8Array}] stored (no compression)
+  const d=new Date(),time=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1),date=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+  const parts=[],central=[];let off=0;
+  for(const f of files){
+    const nm=enc.encode(f.name),crc=crc32(f.data),sz=f.data.length;
+    const h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,0,true);h.setUint16(10,time,true);h.setUint16(12,date,true);
+    h.setUint32(14,crc,true);h.setUint32(18,sz,true);h.setUint32(22,sz,true);h.setUint16(26,nm.length,true);h.setUint16(28,0,true);
+    parts.push(new Uint8Array(h.buffer),nm,f.data);
+    const c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,0,true);c.setUint16(12,time,true);c.setUint16(14,date,true);
+    c.setUint32(16,crc,true);c.setUint32(20,sz,true);c.setUint32(24,sz,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+    central.push(new Uint8Array(c.buffer),nm);
+    off+=30+nm.length+sz;
+  }
+  const cdSize=central.reduce((s,x)=>s+x.length,0);
+  const e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cdSize,true);e.setUint32(16,off,true);
+  const all=[...parts,...central,new Uint8Array(e.buffer)];
+  const out=new Uint8Array(all.reduce((s,x)=>s+x.length,0));let p=0;for(const x of all){out.set(x,p);p+=x.length}
+  return out;
+}
+const xesc=v=>String(v??"").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const colL=i=>String.fromCharCode(65+i);
+function serial(iso){const m=String(iso||"").match(/^(\d{4})-(\d{2})-(\d{2})/);return m?(Date.UTC(+m[1],+m[2]-1,+m[3])-Date.UTC(1899,11,30))/86400000:null}
+function buildXlsx(items){
+  items=items||sorted();
+  const NS='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  const n=items.length+1, ref=`A1:${colL(COLS.length-1)}${Math.max(n,2)}`;
+  const str=(r,c,v,s)=>`<c r="${colL(c)}${r}" t="inlineStr"${s?` s="${s}"`:""}><is><t xml:space="preserve">${xesc(v)}</t></is></c>`;
+  const num=(r,c,v,s)=>`<c r="${colL(c)}${r}" s="${s}"><v>${v}</v></c>`;
+  let rows=`<row r="1">${COLS.map((c,i)=>str(1,i,c[0],3)).join("")}</row>`;
+  items.forEach((it,k)=>{const r=k+2;const d=serial(it.data);
+    const vals=[it.estabelecimento,null,null,it.moeda||"BRL",it.categoria,it.status||"Pendente",fotoPath(it),it.cnpj,it.pagamento,it.obs,it.chave];
+    let cells="";
+    vals.forEach((v,i)=>{
+      if(i===1) cells+=d!=null?num(r,1,d,1):str(r,1,it.data||"");
+      else if(i===2) cells+=num(r,2,(+it.valor||0).toFixed(2),2);
+      else if(v!=null&&v!=="") cells+=str(r,i,v);
+    });
+    rows+=`<row r="${r}">${cells}</row>`;});
+  if(!items.length) rows+=`<row r="2"></row>`;
+  const sheet=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet ${NS}><dimension ref="${ref}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${COLS.map((c,i)=>`<col min="${i+1}" max="${i+1}" width="${c[1]}" customWidth="1"/>`).join("")}</cols><sheetData>${rows}</sheetData><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/><tableParts count="1"><tablePart r:id="rId1"/></tableParts></worksheet>`;
+  const table=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="1" name="NotasViagem" displayName="NotasViagem" ref="${ref}" totalsRowShown="0"><autoFilter ref="${ref}"/><tableColumns count="${COLS.length}">${COLS.map((c,i)=>`<tableColumn id="${i+1}" name="${xesc(c[0])}"/>`).join("")}</tableColumns><tableStyleInfo name="TableStyleMedium2" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/></table>`;
+  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="#,##0.00"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const files=[
+    ["[Content_Types].xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/tables/table1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`],
+    ["_rels/.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+    ["xl/workbook.xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook ${NS}><sheets><sheet name="NotasViagem" sheetId="1" r:id="rId1"/></sheets></workbook>`],
+    ["xl/_rels/workbook.xml.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+    ["xl/worksheets/sheet1.xml",sheet],
+    ["xl/worksheets/_rels/sheet1.xml.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/></Relationships>`],
+    ["xl/tables/table1.xml",table],
+    ["xl/styles.xml",styles]
+  ].map(([name,txt])=>({name,data:enc.encode(txt)}));
+  return zip(files);
+}
+function periodoNome(items){const ds=items.map(i=>i.data).filter(Boolean).sort();return ds.length?ds[ds.length-1].slice(0,7):new Date().toISOString().slice(0,7)}
+window.__test.buildXlsx=buildXlsx; window.__test.zip=zip;
+function showDl(t,err){const m=$("dlMsg");m.textContent=t;m.className="alert"+(err?" err":"");m.hidden=false}
+const MIME={xlsx:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",zip:"application/zip"};
+async function salvarArquivo(filename,data){
+  const type=MIME[filename.split(".").pop()]||"application/octet-stream";
+  const file=new File([data],filename,{type});
+  // iPhone/Android: share sheet ("Salvar em Arquivos", e-mail, WhatsApp...). Computer: normal download.
+  const mobile=/iphone|ipad|ipod|android/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  if(mobile&&navigator.canShare&&navigator.canShare({files:[file]})){
+    try{await navigator.share({files:[file],title:filename});return}
+    catch(e){if(e&&e.name==="AbortError")return}
+  }
+  const url=URL.createObjectURL(file);const a=document.createElement("a");a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);toast("Arquivo gerado");
+}
+$("xlsx").onclick=async()=>{
+  $("dlMsg").hidden=true; const items=sorted();
+  let data; try{data=buildXlsx(items)}catch(e){console.error(e);showDl("Não consegui gerar a planilha.",true);return}
+  await salvarArquivo(`NotasViagem-${periodoNome(items)}.xlsx`,data);
+};
+$("limpar").onclick=()=>{$("limparBox").hidden=false;$("limpar").hidden=true};
+$("limparCancel").onclick=()=>{$("limparBox").hidden=true;render()};
+async function apagarVarias(lista){
+  let falhas=0;
+  for(const it of lista){
+    try{await store.remove(it.id);await apagarFoto(it.foto)}catch(e){falhas++}
+  }
+  $("limparBox").hidden=true;render();
+  toast(falhas?`${lista.length-falhas} apagadas, ${falhas} com erro`:`${lista.length} despesa(s) apagada(s)`);
+}
+$("limparLanc").onclick=()=>apagarVarias(store.items.filter(i=>i.status==="Lançada"));
+$("limparTudo").onclick=()=>apagarVarias([...store.items]);
+$("zip").onclick=async()=>{
+  $("dlMsg").hidden=true; const items=sorted(); const b=$("zip"); const old=b.textContent; b.disabled=true; b.textContent="Juntando fotos…";
+  try{
+    const files=[];let falhou=0;
+    for(const it of items){ if(!it.foto) continue;
+      try{const b=await DB.getFoto(it.foto.id);if(!b) throw 0;files.push({name:fotoPath(it),data:new Uint8Array(await b.arrayBuffer())})}catch(e){falhou++}}
+    files.unshift({name:"NotasViagem.xlsx",data:buildXlsx(items)});
+    await salvarArquivo(`NotasViagem-${periodoNome(items)}.zip`,zip(files));
+    if(falhou) showDl(`${falhou} foto(s) não puderam ser incluídas.`);
+  }catch(e){console.error(e);showDl("Não consegui gerar o arquivo .zip.",true)}
+  finally{b.textContent=old;b.disabled=false}
+};
+
+/* ---------- Inputs ---------- */
+for(const id of ["cam","gal"]) $(id).addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(f) handleFile(f)});
+
+/* Fictitious receipt for testing */
+function drawDemo(){
+  const L=["RESTAURANTE SABOR DA VILA LTDA","CNPJ: 11.222.333/0001-81 IE: 123.456.789.110","RUA DAS FLORES, 120 - CENTRO - SAO PAULO/SP","",
+    "Documento Auxiliar da Nota Fiscal","de Consumidor Eletronica","",
+    "COD  DESCRICAO        QTD  UN  VL TOTAL","001  PRATO EXECUTIVO   1   UN     42,90","002  SUCO NATURAL      1   UN     12,00","003  CAFE EXPRESSO     1   UN      6,50","",
+    "Qtde. total de itens              3","Valor total R$                61,40","Valor a pagar R$              61,40","FORMA PAGAMENTO           VALOR PAGO","Cartao de Credito              61,40","",
+    "NFC-e n 000012345 Serie 001","Emissao: 21/11/2026 12:47:13","Consulte pela Chave de Acesso em","www.nfce.fazenda.sp.gov.br/consulta"];
+  const c=document.createElement("canvas");c.width=720;c.height=60+L.length*34;const x=c.getContext("2d");
+  x.fillStyle="#fbfaf6";x.fillRect(0,0,c.width,c.height);x.fillStyle="#222";x.font="24px 'Courier New',monospace";
+  L.forEach((l,i)=>x.fillText(l,30,50+i*34));
+  return new Promise(r=>c.toBlob(r,"image/png"));
+}
+$("demo").onclick=async()=>{handleImage(await drawDemo())};
+
+store.init();
+if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(e=>console.warn(e)))}
+</script>
+</body></html>
