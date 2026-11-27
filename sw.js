@@ -1,8 +1,8 @@
 // Reembolso UAI — offline support. Bump VERSION on every release.
-const VERSION = "v5-aurora-2026-11-27";
+const VERSION = "v6-aurora-icons";
 const CORE = [
   "./", "index.html", "manifest.webmanifest",
-  "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",
+  "icons/icon-192-v5.png", "icons/icon-512-v5.png", "icons/apple-touch-icon-v5.png",
   "vendor/jsQR.js", "vendor/pdf.min.js", "vendor/pdf.worker.min.js",
   "vendor/tesseract/tesseract.min.js", "vendor/tesseract/worker.min.js",
   "vendor/tesseract/tesseract-core-simd-lstm.wasm.js", "vendor/tesseract/tesseract-core-lstm.wasm.js",
