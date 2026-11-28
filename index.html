@@ -264,17 +264,36 @@ function parseReceiptText(raw){
   const lines=String(raw||"").split(/\r?\n/).map(l=>l.replace(/\s+/g," ").trim()).filter(Boolean);
   const all=lines.join("\n");
   // CNPJ: prefer a valid one
-  const cands=[...all.matchAll(/(\d{2}\s?[.,]?\s?\d{3}\s?[.,]?\s?\d{3}\s?\/?\s?\d{4}\s?-?\s?\d{2})/g)].map(m=>onlyDigits(m[1])).filter(d=>d.length===14);
-  const valid=cands.find(cnpjValid); if(valid||cands[0]) r.cnpj=fmtCnpj(valid||cands[0]);
+  // CNPJ: OCR swaps digits for look-alike letters (O→0, I→1...). Fix those inside number-like runs, then
+  // look for 14 digits that pass the check digits; on a "CNPJ" line also try dropping one stray digit.
+  const fixDig=t=>t.replace(/[OoDQCU]/g,"0").replace(/[Il|!]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2");
+  const runs=[];for(const l of lines){for(const m of l.matchAll(/[0-9OoDQCUIl|!SBZ][0-9OoDQCUIl|!SBZ .,\/'-]{12,}[0-9OoDQCUIl|!SBZ]/g)){
+    if((m[0].match(/\d/g)||[]).length<10) continue; runs.push({d:onlyDigits(fixDig(m[0])),lab:/cnpj|cnp\W/i.test(l)})}}
+  let cnpjOk="",cnpjAny="";
+  for(const {d,lab} of runs){
+    for(let i=0;i+14<=d.length&&!cnpjOk;i++){const w=d.slice(i,i+14);if(cnpjValid(w))cnpjOk=w;}
+    if(!cnpjOk&&lab&&d.length===15){for(let i=0;i<15&&!cnpjOk;i++){const w=d.slice(0,i)+d.slice(i+1);if(cnpjValid(w))cnpjOk=w}}
+    if(!cnpjOk&&lab&&d.length>=14){ // one misread digit: try the usual "/0001" branch, then look-alike digits; accept only a single answer
+      const d0=d;{const d=d0.slice(0,14);
+      const alt={"0":"8","8":"03","1":"7","7":"1","3":"8","5":"6","6":"5","9":"0"},found=new Set();
+      const br=d.slice(0,8)+"0001"+d.slice(12);if(br!==d&&cnpjValid(br))found.add(br);
+      if(!found.size)for(let i=0;i<14;i++)for(const c of alt[d[i]]||""){const w=d.slice(0,i)+c+d.slice(i+1);if(cnpjValid(w))found.add(w)}
+      if(found.size===1) cnpjOk=[...found][0];
+    }}
+    if(!cnpjAny&&lab&&d.length>=14) cnpjAny=d.slice(0,14);
+    if(cnpjOk) break;
+  }
+  if(cnpjOk||cnpjAny) r.cnpj=fmtCnpj(cnpjOk||cnpjAny);
   // Date: first dd/mm/yyyy, prefer one on an "emissão" line
-  const dRe=/(\d{2})[\/.-](\d{2})[\/.-](\d{4})/;
+  const dRe=/(?<!\d)(\d{2})[\/.-](\d{2})[\/.-](\d{4}|\d{2})(?!\d)/;
   const emLine=lines.find(l=>/emiss|data/i.test(l)&&dRe.test(l));
   const dm=(emLine||all).match(dRe);
-  if(dm){const d=+dm[1],mo=+dm[2],y=+dm[3]; if(d>=1&&d<=31&&mo>=1&&mo<=12&&y>=2000&&y<=2100) r.data=`${y}-${dm[2]}-${dm[1]}`;}
+  if(dm){const d=+dm[1],mo=+dm[2],y=dm[3].length===2?2000+(+dm[3]):+dm[3]; if(d>=1&&d<=31&&mo>=1&&mo<=12&&y>=2000&&y<=2100) r.data=`${y}-${dm[2]}-${dm[1]}`;}
   // Total
   const mRe=/(\d{1,3}(?:[.\s]\d{3})*,\s?\d{2})(?!\d)/g;
-  const lastMoney=l=>{const ms=[...l.matchAll(mRe)];return ms.length?parseMoney(ms[ms.length-1][1].replace(/\s/g,"")):NaN};
-  const prio=[/valor\s*a\s*pagar/i,/valor\s*total/i,/total\s*(geral|a\s*pagar|r\$)/i,/^total\b/i,/\btotal\b/i];
+  const mReTot=/(\d{1,3}(?:[.\s]\d{3})*[,.]\s?\d{2})(?!\d)/g; // on total lines OCR often reads the comma as a dot
+  const lastMoney=l=>{const ms=[...l.matchAll(mReTot)];return ms.length?parseMoney(ms[ms.length-1][1].replace(/\s/g,"")):NaN};
+  const prio=[/valor\s*a\s*pagar/i,/valor\s*total/i,/sub\s*total/i,/total\s*(geral|a\s*pagar|r\$)/i,/^total\b/i,/\btotal\b/i];
   for(const re of prio){
     for(let i=0;i<lines.length;i++){
       const l=lines[i]; if(!re.test(l)||/itens|qtd|qtde|tribut|desconto|acr[eé]sc/i.test(l)) continue;
@@ -292,11 +311,21 @@ function parseReceiptText(raw){
   else if(/\bpix\b/.test(low)) r.pagamento="PIX";
   else if(/dinheiro/.test(low)) r.pagamento="Dinheiro";
   // Establishment: first meaningful line before the CNPJ line
-  const cIdx=lines.findIndex(l=>/cnpj/i.test(l));
-  const skip=/danfe|documento|auxiliar|nota fiscal|consumidor|cnpj|^ie\b|inscri|cupom|extrato|sat\b|www|http/i;
-  const pool=(cIdx>0?lines.slice(0,cIdx):lines.slice(0,4));
-  const est=pool.find(l=>(l.match(/[A-Za-zÀ-ú]/g)||[]).length>=5&&!skip.test(l));
-  if(est) r.estabelecimento=est.replace(/^[^A-Za-zÀ-ú0-9]+|[^A-Za-zÀ-ú0-9.)]+$/g,"");
+  const letras=t=>(String(t).match(/[A-Za-zÀ-ú]/g)||[]).length;
+  const limpa=t=>t.replace(/^[a-z]\s+(?=[A-Z])/,"").replace(/^[^A-Za-zÀ-ú0-9]+|[^A-Za-zÀ-ú0-9.)]+$/g,"").replace(/\b(L[I1l|f]DA|LT0A)$/i,"LTDA").trim();
+  const skip=/danfe|documento|auxiliar|nota fiscal|consumidor|cnpj|^ie\b|inscri|cupom|extrato|sat\b|www|http|via (do )?(cliente|estab)|^rua\b|^av\b|avenida|rodovia/i;
+  let est="";
+  // Name on the same line as the CNPJ: "CNPJ: 40.799.910/0001-09 BAR E RESTAURANTE..." or "SAO BARTOLOMEU CNPJ: 28.796..."
+  const cLine=lines.findIndex(l=>/cnpj|cnp\W/i.test(l)&&/\d{3}/.test(l));
+  if(cLine>=0){const l=lines[cLine];
+    const mm=l.match(/\d[\d.\s\/\\,-]{12,}\d/);const depois=mm?l.slice(mm.index+mm[0].length):"";const antes=l.split(/cnp[j\W]/i)[0];
+    if(letras(depois)>=5&&/[A-Za-zÀ-ú]{3}/.test(depois)){est=limpa(depois);const nx=lines[cLine+1]||"";if(/^\S+\s+(LTDA|L[I1]DA|ME|EIRELI|S\/?A)\b/i.test(nx)||/^(LTDA|ME|EIRELI)\b/i.test(nx))est+=" "+limpa(nx)}
+    else if(letras(antes)>=5) est=limpa(antes);}
+  if(!est){const cIdx=lines.findIndex(l=>/cnpj/i.test(l)||/\d{14}/.test(onlyDigits(l)));
+    const pool=(cIdx>0?lines.slice(0,cIdx):lines.slice(0,4));
+    const e=pool.find(l=>letras(l)>=5&&!skip.test(l)&&letras(l)>=l.replace(/\s/g,"").length*0.6);
+    if(e) est=limpa(e);}
+  if(est) r.estabelecimento=est;
   return r;
 }
 const CATEGORIAS=["Restaurante","Lanchonete","Bar","Comércio","Posto de combustível","Locadora de carros","Hotel","Transporte","Outros"];
@@ -315,8 +344,8 @@ window.__test={sugerirCategoria,parseReceiptText,parseNfceQr,cnpjValid,parseMone
 
 /* ---------- Image handling ---------- */
 let currentBlob=null, runId=0;
-function loadImage(blob){return new Promise((res,rej)=>{const u=URL.createObjectURL(blob);const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error("img"));i.src=u;})}
-function toCanvas(img,max){const s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);c.getContext("2d").drawImage(img,0,0,c.width,c.height);return c}
+function loadImage(blob){return new Promise((res,rej)=>{const u=URL.createObjectURL(blob);const i=new Image();i.onload=()=>{URL.revokeObjectURL(u);res(i)};i.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("img"))};i.src=u;})}
+function toCanvas(img,max,up){const s=Math.min(up?4:1,max/Math.max(img.naturalWidth,img.naturalHeight));const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);c.getContext("2d").drawImage(img,0,0,c.width,c.height);return c}
 function findQr(img){
   if(typeof jsQR!=="function") return null;
   for(const max of [1400,900,2200]){
@@ -326,6 +355,17 @@ function findQr(img){
   }
   return null;
 }
+function binarize(c){ // adaptive threshold (local mean): handles shadows and faded thermal print
+  const W=c.width,H=c.height,x=c.getContext("2d"),d=x.getImageData(0,0,W,H),p=d.data,g=new Uint8Array(W*H);
+  for(let i=0,j=0;i<p.length;i+=4,j++)g[j]=(77*p[i]+150*p[i+1]+29*p[i+2])>>8;
+  const I=new Uint32Array((W+1)*(H+1));
+  for(let y=0;y<H;y++){let row=0;for(let k=0;k<W;k++){row+=g[y*W+k];I[(y+1)*(W+1)+k+1]=I[y*(W+1)+k+1]+row}}
+  const r=Math.max(8,Math.round(W*0.02)),C=10;
+  for(let y=0;y<H;y++){const y0=Math.max(0,y-r),y1=Math.min(H,y+r+1);
+    for(let k=0;k<W;k++){const x0=Math.max(0,k-r),x1=Math.min(W,k+r+1);
+      const m=(I[y1*(W+1)+x1]-I[y0*(W+1)+x1]-I[y1*(W+1)+x0]+I[y0*(W+1)+x0])/((y1-y0)*(x1-x0));
+      const v=g[y*W+k]<m-C?0:255,i=(y*W+k)*4;p[i]=p[i+1]=p[i+2]=v}}
+  x.putImageData(d,0,0);return c}
 function grayscale(c){const x=c.getContext("2d");const d=x.getImageData(0,0,c.width,c.height);const p=d.data;
   for(let i=0;i<p.length;i+=4){let g=.299*p[i]+.587*p[i+1]+.114*p[i+2];g=Math.max(0,Math.min(255,(g-128)*1.35+128));p[i]=p[i+1]=p[i+2]=g}
   x.putImageData(d,0,0);return c}
@@ -366,10 +406,11 @@ async function pdfToImage(file){
   ox.fillStyle="#fff";ox.fillRect(0,0,W,H);let y=0;for(const c of pages){ox.drawImage(c,0,y);y+=c.height}
   return await new Promise(r=>out.toBlob(r,"image/jpeg",0.9));
 }
+function setThumb(u){const t=$("thumb");if(t.src&&t.src.startsWith("blob:"))URL.revokeObjectURL(t.src);if(u)t.src=u;else t.removeAttribute("src")}
 function isPdf(f){return f&&(f.type==="application/pdf"||/\.pdf$/i.test(f.name||""))}
 async function handleFile(f){
   if(!isPdf(f)) return handleImage(f);
-  $("preview").hidden=false;$("thumb").removeAttribute("src");$("qrInfo").hidden=true;setStatus("Abrindo o PDF…",0.03);
+  $("preview").hidden=false;setThumb("");$("qrInfo").hidden=true;setStatus("Abrindo o PDF…",0.03);
   try{const b=await pdfToImage(f);if(!b) throw new Error("blob");return handleImage(b)}
   catch(e){console.error(e);setStatus("Não consegui abrir este PDF. Tente tirar uma foto da nota.",0)}
 }
@@ -377,7 +418,7 @@ window.__test.pdfToImage=pdfToImage;
 
 async function handleImage(blob){
   const my=++runId; currentBlob=blob;
-  $("preview").hidden=false; $("thumb").src=URL.createObjectURL(blob);
+  $("preview").hidden=false; setThumb(URL.createObjectURL(blob));
   $("qrInfo").hidden=true; setStatus("Procurando QR code…",0.05);
   resetForm(false);
   let img; try{img=await loadImage(blob)}catch(e){setStatus("Não consegui abrir esta imagem. Tente outra foto.",0);return}
@@ -398,20 +439,24 @@ async function handleImage(blob){
     const w=await getWorker(m=>{if(my!==runId) return;
       if(m.status==="recognizing text") setStatus("Lendo o texto da nota…",0.3+0.7*m.progress);
       else if(/load/.test(m.status)) setStatus("Preparando a leitura (só na primeira vez)…",0.1+0.2*(m.progress||0));});
-    const sc=Math.min(1,1500/img.naturalWidth,7000/img.naturalHeight);
-    const c=grayscale(toCanvas(img,Math.max(img.naturalWidth,img.naturalHeight)*sc));
+    // 2000 px wide (small images are enlarged), then black-and-white with a local threshold
+    const sc=Math.min(2000/img.naturalWidth,9000/img.naturalHeight);
+    const c=binarize(toCanvas(img,Math.max(img.naturalWidth,img.naturalHeight)*sc,true));
     const {data}=await withTimeout(w.recognize(c),90000);
     if(my!==runId) return;
     const r=(data.text||"").replace(/\s/g,"").length>=30?parseReceiptText(data.text):{};
     // QR is more reliable for CNPJ; keep it if present
-    if(qr) delete r.cnpj;
+    if(qr){delete r.cnpj;if(qr.valor) delete r.valor;if(qr.dataIso) delete r.data;}
     fill(r,"leitura");
+    const lembrado=nomePorCnpj(fieldVal("cnpj"));
+    if(lembrado) fill({estabelecimento:lembrado},"memória");
     if(qr&&r.data){const [y,m]=r.data.split("-").map(Number);if(y!==2000+qr.aa||m!==qr.mm) markWarn("data","confira");}
     const miss=["estabelecimento","data","valor"].filter(k=>!fieldVal(k));
     setStatus(miss.length?"Leitura feita. Complete os campos em amarelo.":"Leitura feita. Confira os campos abaixo.",1);
   }catch(e){
     if(my!==runId) return;
     console.error(e);
+    {const lembrado=nomePorCnpj(fieldVal("cnpj"));if(lembrado) fill({estabelecimento:lembrado},"memória");}
     setStatus(qr?"Li o QR code, mas a leitura do texto falhou. Complete os campos.":"A leitura automática falhou neste aparelho. Preencha os campos abaixo.",1);
   }
   markEmpty();
@@ -443,13 +488,33 @@ function resetForm(all=true){
   $("form").reset(); $("f-chave").value=""; $("formErr").hidden=true; catManual=false;
   document.querySelectorAll(".f .chip").forEach(c=>c.hidden=true);
   document.querySelectorAll(".f.empty").forEach(f=>f.classList.remove("empty"));
-  if(all){$("preview").hidden=true;currentBlob=null;runId++}
+  if(all){$("preview").hidden=true;currentBlob=null;runId++;setThumb("")}
+  editId=null;dupOk=false;$("save").textContent="Salvar despesa";$("clear").textContent="Limpar";
+  $("reviewHint").textContent="Os campos são preenchidos pela leitura. Confira tudo antes de salvar: a leitura automática pode errar.";
 }
 $("form").addEventListener("input",markEmpty);
 $("clear").onclick=()=>resetForm(true);
 $("f-cnpj").addEventListener("blur",e=>{const d=onlyDigits(e.target.value);if(d.length===14){e.target.value=fmtCnpj(d);if(!cnpjValid(d))markWarn("cnpj","inválido?")}});
 $("f-valor").addEventListener("blur",e=>{const v=parseMoney(e.target.value);if(isFinite(v))e.target.value=moneyStr(v)});
 
+let editId=null, dupOk=false;
+function nomesCnpj(){try{return JSON.parse(lsGet("nomesCnpj")||"{}")}catch(e){return {}}}
+function nomePorCnpj(c){const d=onlyDigits(c);return d.length===14?nomesCnpj()[d]||"":""}
+function lembrarNome(c,nome){const d=onlyDigits(c);if(d.length!==14||!nome)return;const m=nomesCnpj();m[d]=nome;lsSet("nomesCnpj",JSON.stringify(m))}
+function acharDuplicada(rec){
+  const n=s=>String(s||"").toLowerCase().replace(/\s+/g," ").trim();
+  return store.items.find(i=>i.id!==editId&&((rec.chave&&i.chave===rec.chave)||(n(i.estabelecimento)===n(rec.estabelecimento)&&i.data===rec.data&&Math.abs((+i.valor||0)-rec.valor)<0.005)));
+}
+function editar(it){
+  resetForm(true);editId=it.id;
+  for(const [k,v] of Object.entries({estabelecimento:it.estabelecimento,cnpj:it.cnpj,data:it.data,valor:it.valor,pagamento:it.pagamento,moeda:it.moeda||"BRL",categoria:it.categoria,chave:it.chave})){
+    if(v==null||v==="")continue;$(map[k]).value=k==="valor"?moneyStr(+v):v}
+  $("f-obs").value=it.obs||"";catManual=true;markEmpty();
+  $("save").textContent="Salvar alterações";$("clear").textContent="Cancelar edição";
+  $("reviewHint").textContent="Editando a despesa salva. A foto continua a mesma.";
+  $("review").scrollIntoView({behavior:"auto",block:"start"});
+}
+$("form").addEventListener("input",()=>{dupOk=false});
 $("form").addEventListener("submit",async e=>{
   e.preventDefault();
   const err=$("formErr");
@@ -460,7 +525,18 @@ $("form").addEventListener("submit",async e=>{
   if(!(valor>0)) probs.push("montante");
   if(!$("f-cat").value) probs.push("categoria");
   if(probs.length){err.textContent="Preencha: "+probs.join(", ")+".";err.hidden=false;markEmpty();return}
+  const recNovo={estabelecimento:fieldVal("estabelecimento"),data:fieldVal("data"),valor:Math.round(valor*100)/100,chave:$("f-chave").value};
+  const dup=acharDuplicada(recNovo);
+  if(dup&&!dupOk){dupOk=true;err.textContent=`Parece repetida: ${dup.estabelecimento}, ${fmtDate(dup.data)}, ${brl(dup.valor)} já está na lista. Toque em salvar de novo para salvar mesmo assim.`;err.hidden=false;return}
   err.hidden=true;
+  lembrarNome(fieldVal("cnpj"),fieldVal("estabelecimento"));
+  if(editId){
+    const patch={estabelecimento:fieldVal("estabelecimento"),cnpj:fieldVal("cnpj"),data:fieldVal("data"),valor:Math.round(valor*100)/100,
+      moeda:$("f-moeda").value||"BRL",categoria:$("f-cat").value,pagamento:$("f-pag").value,obs:$("f-obs").value.trim()};
+    try{await store.update(editId,patch);toast("Alterações salvas");resetForm(true);window.scrollTo({top:$("list").offsetTop-10,behavior:"auto"})}
+    catch(x){err.textContent="Não consegui salvar. Tente de novo.";err.hidden=false;console.error(x)}
+    return;
+  }
   const rec={estabelecimento:fieldVal("estabelecimento"),cnpj:fieldVal("cnpj"),data:fieldVal("data"),valor:Math.round(valor*100)/100,
     moeda:$("f-moeda").value||"BRL",categoria:$("f-cat").value,status:"Pendente",
     pagamento:$("f-pag").value,obs:$("f-obs").value.trim(),chave:$("f-chave").value,criadoEm:new Date().toISOString()};
@@ -519,36 +595,40 @@ function sorted(){return [...store.items].sort((a,b)=>String(a.data).localeCompa
 function render(){
   const ul=$("ledger"); ul.textContent="";
   const items=sorted();
-  for(const it of items){
+  for(const it of [...items].reverse()){
     const li=document.createElement("li");
     const who=document.createElement("div");who.className="who";who.textContent=it.estabelecimento||"(sem nome)";
-    const val=document.createElement("div");val.className="val";val.textContent=brl(it.valor);
+    const val=document.createElement("div");val.className="val";val.textContent=(Number(it.valor)||0).toLocaleString("pt-BR",{style:"currency",currency:it.moeda||"BRL"});
     const meta=document.createElement("div");meta.className="meta";
     meta.textContent=[fmtDate(it.data),it.pagamento,it.obs].filter(Boolean).join(" · ");
     const act=document.createElement("div");act.className="act";
     const del=document.createElement("button");del.type="button";del.textContent="Excluir";
     del.onclick=async()=>{if(!del.classList.contains("confirm")){del.classList.add("confirm");del.textContent="Toque de novo para excluir";setTimeout(()=>{del.classList.remove("confirm");del.textContent="Excluir"},3500);return}
-      try{await store.remove(it.id);toast("Despesa excluída");
+      try{await store.remove(it.id);if(editId===it.id)resetForm(true);toast("Despesa excluída");
         await apagarFoto(it.foto)}catch(e){toast("Não consegui excluir")}};
     const lanc=it.status==="Lançada";
     const st=document.createElement("span");st.className="st "+(lanc?"ok":"pend");st.textContent=lanc?"Lançada":"Pendente";who.append(st);
-    const tog=document.createElement("button");tog.type="button";tog.textContent=lanc?"Voltar para pendente":"Marcar lançada";
+    const tog=document.createElement("button");tog.type="button";tog.textContent=lanc?"Desmarcar":"Marcar lançada";
     tog.onclick=async()=>{try{await store.update(it.id,{status:lanc?"Pendente":"Lançada"})}catch(e){toast("Não consegui atualizar")}};
-    act.append(tog,del);
+    const ed=document.createElement("button");ed.type="button";ed.textContent="Editar";ed.onclick=()=>editar(it);
+    act.append(ed,tog,del);
     if(it.foto&&it.foto.id){li.classList.add("has-foto");const ph=document.createElement("img");ph.className="ph";ph.alt="Foto da nota";fotoURL(it.foto.id).then(u=>{if(u)ph.src=u});li.append(ph)}
     meta.textContent=[fmtDate(it.data),it.categoria,it.moeda&&it.moeda!=="BRL"?it.moeda:"",it.pagamento,it.obs].filter(Boolean).join(" · ");
     li.append(who,val,meta,act); ul.append(li);
   }
-  const total=items.reduce((s,i)=>s+(+i.valor||0),0);
-  $("total").textContent=brl(total);
+  const somar=lista=>{const t={};for(const i of lista){const m=i.moeda||"BRL";t[m]=(t[m]||0)+(+i.valor||0)}return t};
+  const fmtM=(m,v)=>(Number(v)||0).toLocaleString("pt-BR",{style:"currency",currency:m});
+  const extras=t=>Object.entries(t).filter(([m])=>m!=="BRL").map(([m,v])=>fmtM(m,v));
+  const tAll=somar(items), tPend=somar(items.filter(i=>i.status!=="Lançada"));
+  $("total").textContent=[brl(tAll.BRL||0),...extras(tAll)].join(" + ");
   $("empty").hidden=items.length>0; $("totalRow").hidden=!items.length;
   $("xlsx").disabled=!items.length; $("zip").disabled=!items.some(i=>i.foto);
   $("limpar").hidden=!items.length||!$("limparBox").hidden; if(!items.length) $("limparBox").hidden=true;
   const nl=items.filter(i=>i.status==="Lançada").length; $("nLanc").textContent=nl; $("limparLanc").disabled=!nl;
   $("storeNote").textContent=items.length?`(${items.length})`:"";
-  $("heroTotal").textContent=brl(total);
-  const np=items.length-nl;
-  $("heroSub").textContent=items.length?`${items.length} ${items.length>1?"notas":"nota"} · ${np} ${np===1?"pendente":"pendentes"}`:"Fotografe a nota, confira e baixe a planilha.";
+  $("heroTotal").textContent=brl(tPend.BRL||0);
+  const np=items.length-nl, ex=extras(tPend);
+  $("heroSub").textContent=items.length?`${np} ${np===1?"nota pendente":"notas pendentes"}${ex.length?" · + "+ex.join(" + "):""}${nl?` · ${nl} já ${nl===1?"lançada":"lançadas"}`:""}`:"Fotografe a nota, confira e baixe a planilha.";
   $("tabXlsx").disabled=!items.length;
 }
 $("tabLista").onclick=()=>$("list").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});
