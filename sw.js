@@ -1,5 +1,5 @@
 // Reembolso UAI — offline support. Bump VERSION on every release.
-const VERSION = "v6-aurora-icons";
+const VERSION = "v7-editar-duplicadas";
 const CORE = [
   "./", "index.html", "manifest.webmanifest",
   "icons/icon-192-v5.png", "icons/icon-512-v5.png", "icons/apple-touch-icon-v5.png",
