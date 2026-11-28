@@ -1,5 +1,5 @@
 // Reembolso UAI — offline support. Bump VERSION on every release.
-const VERSION = "v7-editar-duplicadas";
+const VERSION = "v8-leitura-calibrada";
 const CORE = [
   "./", "index.html", "manifest.webmanifest",
   "icons/icon-192-v5.png", "icons/icon-512-v5.png", "icons/apple-touch-icon-v5.png",
